@@ -1,4 +1,4 @@
-"""Asynchronous SQLAlchemy engine and session factory construction."""
+"""Build reusable asynchronous SQLAlchemy engine and session resources."""
 """异步SQLAlchemy的engine and session factory的创建,之后可以复用"""
 
 from dataclasses import dataclass
@@ -39,4 +39,3 @@ def build_database_resources(database_url: str) -> DatabaseResources:
         engine=engine,
         session_factory=session_factory,
     )
-

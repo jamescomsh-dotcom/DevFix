@@ -1,4 +1,4 @@
-"""Application configuration loaded from environment variables."""
+"""Load and validate DevFix configuration from environment variables."""
 """获取连接数据库的URL配置文件"""
 
 from functools import lru_cache

@@ -43,4 +43,3 @@ async def test_mysql_async_session_selects_one() -> None:
         assert value == 1
     finally:
         await resources.dispose()
-

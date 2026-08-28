@@ -42,4 +42,3 @@ async def get_database(
 
 
 DatabaseSession = Annotated[AsyncSession, Depends(get_database)]
-
