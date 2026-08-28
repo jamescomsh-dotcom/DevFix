@@ -172,3 +172,40 @@ Codex。
 - AI 先分析仓库与历史设计，给出单表方案；开发者确认后才写入当前设计基线。
 - 数据库初始化、真实验收和所有 Git/GitHub 写入仍由开发者掌控。
 - 下一道人工确认门：开发者审阅并提交本轮文档，再进入 `Issue` 模型与初始迁移的 Red → Green 小步实现。
+
+## 2026-08-28：阶段 3.1 单个 Issue 模型
+
+### 本轮边界
+
+- 只实现 `IssueStatus`、`Base`、`Issue` 和纯 SQLAlchemy metadata 测试。
+- 不配置 Alembic，不创建数据库表，不连接 MySQL。
+- 不实现 Schema、Router、Service 或 CRUD。
+
+### 第一次 Red → Green
+
+1. 先添加 `tests/test_models.py`，测试因 `app.enums` 不存在而在收集阶段失败。
+2. 实现一个共享状态枚举、一个 Declarative Base 和唯一的 `Issue` 模型。
+3. 模型测试达到 `6 passed`。
+
+模型严格对应设计中的 11 列，不包含外键、relationship、第二张表或额外索引。`status` 使用非原生 SQLAlchemy Enum，因此 MySQL 列仍是 `VARCHAR(20)`；ORM 默认值和数据库默认值均为 `OPEN`。时间使用约定为 UTC 的无时区值写入 `DATETIME(6)`。
+
+### 独立审查与第二次 Red → Green
+
+独立审查发现：MySQL 常用的大小写不敏感排序规则可能让自动状态 `CHECK` 接受原生 SQL 写入的 `open`，但 SQLAlchemy 读取时无法把它转换为合法枚举。
+
+1. 先增加 MySQL 方言 DDL 测试，当前实现出现 `2 failed, 5 passed`。
+2. 关闭 Enum 自动约束，改为命名的严格检查：`CAST(status AS BINARY) IN ('OPEN', 'IN_PROGRESS', 'RESOLVED')`。
+3. 同时让测试实际执行时间默认回调，并避免把“无索引”锁成永久契约。
+4. 修正后模型测试达到 `7 passed`。
+
+这次修正证明 AI 生成代码仍需要独立审查和可复现测试，不能只看到第一次 Green 就结束。
+
+### 当前验证
+
+- `pytest -q -W error -rs`：`23 passed, 1 skipped`。
+- `python -m compileall -q app tests`：成功。
+- `pip check`：`No broken requirements found.`
+- SQLAlchemy mapper 配置与 MySQL 8 方言 DDL 静态编译成功。
+- 生成的 DDL 只有一张 `issues` 业务表、11 列、主键和严格状态约束。
+- 跳过项仍是显式启用的真实 MySQL `SELECT 1`；本轮没有读取 `.env` 或访问数据库。
+- AI 未执行 commit、push、PR、迁移或数据库写入。

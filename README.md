@@ -2,7 +2,7 @@
 
 DevFix Lite 是一个使用 FastAPI、SQLAlchemy AsyncSession、MySQL 和 Alembic 构建的单表异步 CRUD 后端，用于记录开发问题、解决过程、验证结果以及 AI 协作信息。
 
-当前完成 **阶段 1 的本地技术验收**，并已将阶段 2 设计收敛为一张 `issues` 业务表。应用已经具备异步 Engine、Session 工厂、请求级 Session 依赖和关闭清理，专用测试账号下的真实 MySQL `SELECT 1` 已通过；业务模型、迁移和 CRUD 尚未开始实现。
+当前已完成阶段 2 的单表设计重置和阶段 3 的第一个小步：`Issue` ORM 模型蓝图及纯结构测试。异步 Engine、Session 工厂和真实 MySQL `SELECT 1` 验收继续保留；Alembic 迁移、数据库建表和 CRUD 尚未开始。
 
 ## 当前能力
 
@@ -13,6 +13,7 @@ DevFix Lite 是一个使用 FastAPI、SQLAlchemy AsyncSession、MySQL 和 Alembi
 - 每个数据库请求使用独立 `AsyncSession`；异常回滚，请求结束关闭。
 - 应用关闭时释放异步 Engine，启动时不连接数据库、不创建表。
 - 默认自动化测试不需要数据库，也不会读取 `.env`。
+- 已定义唯一业务模型 `Issue`，包含 11 列、3 个状态和严格状态约束；当前只存在于 SQLAlchemy metadata，尚未创建数据库表。
 
 ## 已确认的 MVP 范围
 
@@ -71,7 +72,7 @@ mysql+asyncmy://用户名:经过URL编码的密码@127.0.0.1:3306/devfix?charset
 .\.venv\Scripts\python.exe -m pytest
 ```
 
-默认结果应为 `16 passed, 1 skipped`。真实 MySQL 用例默认需要显式启用，因此会被跳过；本机已另行启用并取得 `1 passed` 的验收证据。
+当前默认结果应为 `23 passed, 1 skipped`。真实 MySQL 用例默认需要显式启用，因此会被跳过；本机已另行启用并取得 `1 passed` 的阶段 1 验收证据。
 
 ### 真实 MySQL 只读验收
 
@@ -97,8 +98,12 @@ app/
 ├── config.py
 ├── db.py
 ├── dependencies.py
+├── enums.py
 ├── main.py
 ├── models/
+│   ├── __init__.py
+│   ├── base.py
+│   └── issue.py
 ├── routers/
 │   └── health.py
 ├── schemas/
@@ -113,21 +118,22 @@ tests/
 │   └── test_mysql_connection.py
 ├── test_config.py
 ├── test_database.py
+├── test_models.py
 └── test_health.py
 ```
 
-Router 负责 HTTP 输入输出，Schema 负责请求和响应验证，Service 负责简单业务规则和显式提交，Model 负责 SQLAlchemy 映射。Session 依赖只管理异常回滚与关闭，不会隐式提交。当前仍没有业务模型或表。
+Router 负责 HTTP 输入输出，Schema 负责请求和响应验证，Service 负责简单业务规则和显式提交，Model 负责 SQLAlchemy 映射。Session 依赖只管理异常回滚与关闭，不会隐式提交。当前已有 `Issue` 模型蓝图，但还没有 Alembic 迁移或真实 `issues` 表。
 
 ## 开发阶段
 
 1. 阶段 0：需求与仓库初始化、`/health`（本地代码已完成）。
 2. 阶段 1：异步 Engine、Session 工厂和数据库依赖（本地技术验收已完成）。
-3. 阶段 2：将原三表方案重置为单表 CRUD，并确认 DevFix Lite v2.0 设计基线（当前阶段）。
-4. 阶段 3：实现一个 `Issue` 模型和一条 Alembic 初始迁移。
+3. 阶段 2：将原三表方案重置为单表 CRUD，并确认 DevFix Lite v2.0 设计基线（已完成并提交）。
+4. 阶段 3：实现一个 `Issue` 模型和一条 Alembic 初始迁移（模型已完成，迁移待开始）。
 5. 阶段 4：按创建、列表、详情、更新、删除五个小步完成 CRUD。
 6. 阶段 5：使用自动化测试、真实 MySQL、Swagger、README、AI 开发日志和 Pull Request 完成验收。
 
-阶段 1 已完成提交、推送和 Pull Request 审查。下一步先由开发者审阅并提交本轮设计调整，再开始单个 `Issue` 模型和 Alembic 初始迁移。
+下一步由开发者审阅并提交 `Issue` 模型小步；随后单独配置 Alembic 环境和初始迁移。
 
 ## 设计资料
 

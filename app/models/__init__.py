@@ -1,2 +1,8 @@
-"""SQLAlchemy models will be introduced in development phase 2."""
+"""Public exports for SQLAlchemy models and metadata."""
+
+from app.enums import IssueStatus
+from app.models.base import Base
+from app.models.issue import Issue
+
+__all__ = ["Base", "Issue", "IssueStatus"]
 
