@@ -260,3 +260,42 @@ Codex。
 MySQL 提示 `Will assume non-transactional DDL` 属于正常行为，也说明真实迁移必须先在专用测试库验收，不能假设失败时整次 DDL 会自动回滚。
 
 阶段 3 至此完成。AI 负责配置、迁移定义、测试、审查和指导；开发者保留数据库凭据并亲自执行真实迁移与验收。
+
+## 2026-08-28：阶段 4.1 创建 Issue 接口
+
+### 本轮边界
+
+- 只实现 `POST /api/v1/issues`。
+- 只增加 `IssueCreate`、`IssueRead`、一个创建 Service 和一个 POST Router。
+- 不实现 GET、PATCH、DELETE、`IssueUpdate`、搜索、分页或异常框架。
+- 默认测试通过 FastAPI dependency override 使用假的 Session，不读取 `.env`、不连接 MySQL。
+
+### Red → Green
+
+1. 先添加创建接口测试，因为 `app.schemas.issue` 不存在，测试在收集阶段 Red。
+2. `IssueCreate` 对 title、description 和 ai_tool 去除首尾空格并限制长度，使用 `extra='forbid'` 拒绝 status、id 和未知字段。
+3. Service 严格按 `add -> flush -> commit` 写入；异常不被吞掉，由现有数据库依赖负责 rollback 和 close。
+4. Router 返回 201，并通过 `IssueRead(from_attributes=True)` 输出完整 11 个字段。
+5. OpenAPI 测试锁定 `/api/v1/issues` 当前只有 POST，且尚不存在 `/{issue_id}`。
+6. 目标测试达到 `7 passed`。
+
+### 独立审查修正
+
+审查确认当前所有响应字段在 flush 后已经确定，且 Session 使用 `expire_on_commit=False`，因此不需要为了创建响应额外执行 refresh SELECT。项目设计同步改为：只有数据库生成了额外响应值时才 refresh。
+
+测试还增加共享事件列表，明确锁定调用顺序必须为：
+
+```text
+add
+  -> flush
+  -> commit
+```
+
+### 当前验证
+
+- `pytest -q tests/test_issue_create.py -W error`：`7 passed`。
+- `pytest -q -W error -rs`：`33 passed, 1 skipped`。
+- OpenAPI 静态检查：`POST_ONLY_OK`。
+- `python -m compileall -q app tests`：成功。
+- `git diff --check`：通过。
+- 本轮没有连接数据库，不能把 fake Session 测试称为真实 MySQL 创建验收。

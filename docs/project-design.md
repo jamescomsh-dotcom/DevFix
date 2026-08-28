@@ -186,7 +186,7 @@ Swagger / HTTP
 
 - Router：HTTP 参数、响应模型、状态码和 404 转换。
 - Schema：输入验证和响应边界。
-- Service：查询、写入、commit、refresh 和单行业务操作。
+- Service：查询、写入、flush、commit；只有数据库生成了额外响应值时才 refresh。
 - Model：issues 表映射。
 - Dependency：创建 Session、异常回滚并始终关闭。
 

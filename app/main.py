@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from app.config import Settings, get_settings
 from app.db import DatabaseResources, build_database_resources
 from app.routers.health import router as health_router
+from app.routers.issues import router as issues_router
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -43,6 +44,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     application.include_router(health_router)
+    application.include_router(issues_router)
     return application
 
 
