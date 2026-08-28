@@ -209,3 +209,37 @@ Codex。
 - 生成的 DDL 只有一张 `issues` 业务表、11 列、主键和严格状态约束。
 - 跳过项仍是显式启用的真实 MySQL `SELECT 1`；本轮没有读取 `.env` 或访问数据库。
 - AI 未执行 commit、push、PR、迁移或数据库写入。
+
+## 2026-08-28：阶段 3.2 Alembic 初始迁移定义
+
+### 本轮边界
+
+- 配置 Alembic 异步环境并创建唯一初始 revision。
+- 通过静态 metadata 和离线 SQL 检查迁移，不连接真实数据库。
+- 不实现 Schema、Router、Service 或 CRUD。
+- `upgrade/current/check` 的真实 MySQL 验收继续由开发者在 `devfix_test` 上执行。
+
+### Red → Green
+
+1. 先添加 `tests/test_migrations.py`，因为 `alembic.ini` 和迁移目录不存在，得到 `3 failed`。
+2. 创建 `alembic.ini`、异步 `env.py`、官方结构的 revision 模板和初始迁移。
+3. 测试验证只有一个 base/head、迁移 SQL 与 `Issue` 模型 SQL 完全一致、downgrade 只删除 `issues`，达到 `3 passed`。
+
+### 安全审查修正
+
+独立审查指出：不应把原始数据库 URL 临时放入 Alembic 配置字典，否则 URL 编码中的 `%` 可能触发 ConfigParser 插值问题，也会扩大秘密在配置对象中的停留范围。
+
+1. 先把“`alembic.ini` 不含 `sqlalchemy.url`、使用 `make_url()` 和 `create_async_engine()`”写进测试，得到 `1 failed, 2 passed`。
+2. `env.py` 改为从现有 `Settings` 获取 `SecretStr`，转换成 SQLAlchemy `URL` 对象，并直接创建短生命周期异步 Engine。
+3. 修正后迁移测试恢复为 `3 passed`。
+
+### 当前静态验证
+
+- `alembic heads`：`20260828_01 (head)`。
+- `alembic history --verbose`：唯一 revision，父节点为 `<base>`。
+- 使用假的端口 1 连接串执行 `upgrade head --sql` 成功；命令只渲染 SQL，没有创建 Engine 或连接数据库。
+- 离线 SQL 由 Alembic 管理 `alembic_version`，唯一业务 DDL 是创建 `issues`。
+- `pytest -q -W error -rs`：`26 passed, 1 skipped`。
+- `python -m compileall -q app tests alembic`：成功。
+- `git diff --check`：通过。
+- 没有读取项目 `.env`，没有执行真实迁移、数据库写入或 Git 写入。

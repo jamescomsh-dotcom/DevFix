@@ -2,7 +2,7 @@
 
 DevFix Lite 是一个使用 FastAPI、SQLAlchemy AsyncSession、MySQL 和 Alembic 构建的单表异步 CRUD 后端，用于记录开发问题、解决过程、验证结果以及 AI 协作信息。
 
-当前已完成阶段 2 的单表设计重置和阶段 3 的第一个小步：`Issue` ORM 模型蓝图及纯结构测试。异步 Engine、Session 工厂和真实 MySQL `SELECT 1` 验收继续保留；Alembic 迁移、数据库建表和 CRUD 尚未开始。
+当前已完成阶段 2 的单表设计重置，以及阶段 3 的 `Issue` 模型和 Alembic 初始迁移定义。异步 Engine、Session 工厂和真实 MySQL `SELECT 1` 验收继续保留；迁移尚未应用到真实测试库，CRUD 也尚未开始。
 
 ## 当前能力
 
@@ -14,6 +14,7 @@ DevFix Lite 是一个使用 FastAPI、SQLAlchemy AsyncSession、MySQL 和 Alembi
 - 应用关闭时释放异步 Engine，启动时不连接数据库、不创建表。
 - 默认自动化测试不需要数据库，也不会读取 `.env`。
 - 已定义唯一业务模型 `Issue`，包含 11 列、3 个状态和严格状态约束；当前只存在于 SQLAlchemy metadata，尚未创建数据库表。
+- 已配置 Alembic 异步环境和唯一初始 revision `20260828_01`；离线 SQL 已验证与 `Issue` 模型一致。
 
 ## 已确认的 MVP 范围
 
@@ -72,7 +73,7 @@ mysql+asyncmy://用户名:经过URL编码的密码@127.0.0.1:3306/devfix?charset
 .\.venv\Scripts\python.exe -m pytest
 ```
 
-当前默认结果应为 `23 passed, 1 skipped`。真实 MySQL 用例默认需要显式启用，因此会被跳过；本机已另行启用并取得 `1 passed` 的阶段 1 验收证据。
+当前默认结果应为 `26 passed, 1 skipped`。真实 MySQL 用例默认需要显式启用，因此会被跳过；本机已另行启用并取得 `1 passed` 的阶段 1 验收证据。
 
 ### 真实 MySQL 只读验收
 
@@ -94,6 +95,12 @@ Remove-Item Env:DEVFIX_TEST_DATABASE_URL -ErrorAction SilentlyContinue
 ## 当前目录
 
 ```text
+alembic/
+├── env.py
+├── script.py.mako
+└── versions/
+    └── 20260828_01_create_issues_table.py
+alembic.ini
 app/
 ├── config.py
 ├── db.py
@@ -118,22 +125,23 @@ tests/
 │   └── test_mysql_connection.py
 ├── test_config.py
 ├── test_database.py
+├── test_migrations.py
 ├── test_models.py
 └── test_health.py
 ```
 
-Router 负责 HTTP 输入输出，Schema 负责请求和响应验证，Service 负责简单业务规则和显式提交，Model 负责 SQLAlchemy 映射。Session 依赖只管理异常回滚与关闭，不会隐式提交。当前已有 `Issue` 模型蓝图，但还没有 Alembic 迁移或真实 `issues` 表。
+Router 负责 HTTP 输入输出，Schema 负责请求和响应验证，Service 负责简单业务规则和显式提交，Model 负责 SQLAlchemy 映射。Session 依赖只管理异常回滚与关闭，不会隐式提交。当前已有 `Issue` 模型和初始迁移文件，但真实 `issues` 表仍要由开发者在专用测试库执行迁移后才会出现。
 
 ## 开发阶段
 
 1. 阶段 0：需求与仓库初始化、`/health`（本地代码已完成）。
 2. 阶段 1：异步 Engine、Session 工厂和数据库依赖（本地技术验收已完成）。
 3. 阶段 2：将原三表方案重置为单表 CRUD，并确认 DevFix Lite v2.0 设计基线（已完成并提交）。
-4. 阶段 3：实现一个 `Issue` 模型和一条 Alembic 初始迁移（模型已完成，迁移待开始）。
+4. 阶段 3：实现一个 `Issue` 模型和一条 Alembic 初始迁移（代码与静态验收已完成，真实测试库验收待执行）。
 5. 阶段 4：按创建、列表、详情、更新、删除五个小步完成 CRUD。
 6. 阶段 5：使用自动化测试、真实 MySQL、Swagger、README、AI 开发日志和 Pull Request 完成验收。
 
-下一步由开发者审阅并提交 `Issue` 模型小步；随后单独配置 Alembic 环境和初始迁移。
+下一步由开发者审阅并提交 Alembic 小步；随后在 `devfix_test` 上执行真实 `upgrade head`、`current --check-heads` 和 `check` 验收。
 
 ## 设计资料
 
