@@ -243,3 +243,20 @@ Codex。
 - `python -m compileall -q app tests alembic`：成功。
 - `git diff --check`：通过。
 - 没有读取项目 `.env`，没有执行真实迁移、数据库写入或 Git 写入。
+
+### 开发者真实 MySQL 验收
+
+开发者提交 Alembic 小步后，在同一个 PowerShell 会话中通过 `Read-Host` 临时设置专用测试连接串。连接串和密码没有发送给 AI，也没有写入 Git。
+
+验收顺序与结果：
+
+1. 只打印 URL 中的数据库名称，确认目标严格为 `devfix_test`。
+2. `alembic upgrade head`：成功执行 `upgrade -> 20260828_01`，创建迁移管理表和唯一业务表。
+3. `alembic current --check-heads`：输出 `20260828_01 (head)`。
+4. `alembic check`：输出 `No new upgrade operations detected.`，证明数据库结构与当前模型一致。
+5. 显式启用异步 MySQL 集成测试：`1 passed in 0.11s`。
+6. 删除 `DATABASE_URL`、`DEVFIX_TEST_DATABASE_URL` 和 `DEVFIX_RUN_MYSQL_TESTS` 三个临时环境变量；验证命令无输出。
+
+MySQL 提示 `Will assume non-transactional DDL` 属于正常行为，也说明真实迁移必须先在专用测试库验收，不能假设失败时整次 DDL 会自动回滚。
+
+阶段 3 至此完成。AI 负责配置、迁移定义、测试、审查和指导；开发者保留数据库凭据并亲自执行真实迁移与验收。
