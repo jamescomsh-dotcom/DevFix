@@ -299,3 +299,42 @@ add
 - `python -m compileall -q app tests`：成功。
 - `git diff --check`：通过。
 - 本轮没有连接数据库，不能把 fake Session 测试称为真实 MySQL 创建验收。
+
+## 2026-08-28：阶段 4.2 查询 Issue 列表接口
+
+### 本轮边界
+
+- 只实现 `GET /api/v1/issues`，复用已有 `IssueRead` 和数据库依赖。
+- 不增加筛选、搜索、分页、统计、详情路由或新 Schema。
+- 不修改模型、迁移和数据库配置，不读取 `.env`，不连接 MySQL。
+
+### Red → Green
+
+1. 先增加列表、空列表和 OpenAPI 测试；实现前两个请求返回 405，OpenAPI 也缺少 GET，得到 `3 failed`。
+2. Service 使用 `select(Issue)`，把 `created_at DESC, id DESC` 排序交给数据库执行。
+3. `await session.scalars(statement)` 后同步调用 `result.all()`，转换为 `list[Issue]` 返回。
+4. Router 在原 collection path 增加 GET，使用 `response_model=list[IssueRead]`；有数据返回数组，无数据返回 `[]`。
+5. 阶段 4.1 的 OpenAPI 测试同步收窄为只验证 POST 创建契约；新增测试负责锁定 collection path 的完整方法集合为 GET 和 POST。
+
+### 只读边界与测试证据
+
+- 测试编译传给 `session.scalars()` 的 MySQL SQL，精确验证排序为 `issues.created_at DESC, issues.id DESC`，而不是依赖假数据碰巧排好序。
+- 测试验证查询不包含 WHERE、LIMIT 或 OFFSET，符合当前无筛选、无分页范围。
+- 假 Session 明确验证 GET 不调用 `add`、`flush`、`commit`、`refresh` 或 `delete`。
+- 定向测试：`10 passed`（创建与列表接口）。
+- 完整默认测试：`36 passed, 1 skipped`；跳过项仍是真实 MySQL 连接用例。
+- `git diff --check`：通过。
+
+本轮只能证明 FastAPI 调用链、响应序列化、SQL 结构和只读行为通过无数据库自动化测试，尚未进行真实 MySQL 列表查询或 Swagger 人工验收。
+
+### 当前可解释的列表调用链
+
+```text
+GET /api/v1/issues
+  -> FastAPI 注入请求级 AsyncSession
+  -> issues Router 调用 list_issues Service
+  -> Service 构造 SELECT ... ORDER BY created_at DESC, id DESC
+  -> AsyncSession.scalars() 获取 Issue 标量结果
+  -> IssueRead 将 ORM 对象列表序列化为 JSON 数组
+  -> 数据库依赖关闭 Session
+```

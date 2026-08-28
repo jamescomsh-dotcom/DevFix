@@ -172,7 +172,7 @@ async def test_create_issue_propagates_flush_error_without_committing() -> None:
 
 
 @pytest.mark.asyncio
-async def test_openapi_exposes_only_post_for_issue_collection(
+async def test_openapi_exposes_create_contract_for_issue_collection(
     client: AsyncClient,
 ) -> None:
     response = await client.get("/openapi.json")
@@ -180,6 +180,6 @@ async def test_openapi_exposes_only_post_for_issue_collection(
     assert response.status_code == 200
     paths = response.json()["paths"]
     issue_path = paths["/api/v1/issues"]
-    assert set(issue_path) == {"post"}
+    assert "post" in issue_path
     assert issue_path["post"]["responses"].get("201") is not None
     assert "/api/v1/issues/{issue_id}" not in paths

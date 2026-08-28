@@ -1,5 +1,6 @@
 """Business operations for the single Issue resource."""
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Issue
@@ -16,3 +17,13 @@ async def create_issue(
     await session.flush()
     await session.commit()
     return issue
+
+
+async def list_issues(session: AsyncSession) -> list[Issue]:
+    """Return all issues in a stable newest-first order."""
+    statement = select(Issue).order_by(
+        Issue.created_at.desc(),
+        Issue.id.desc(),
+    )
+    result = await session.scalars(statement)
+    return list(result.all())
