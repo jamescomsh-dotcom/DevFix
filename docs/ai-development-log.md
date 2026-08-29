@@ -574,3 +574,24 @@ pytest -q -W error tests/integration/test_mysql_crud.py -rs
 - Swagger 示例记录已经删除，没有留下本轮人工验收数据。
 
 阶段 5.2 至此完成。当前已具备无数据库测试、真实 MySQL 自动化 CRUD 和 Swagger 人工 CRUD 三层证据；GitHub Pull Request 收尾仍由开发者执行。
+
+## 2026-08-29：阶段 5.3 项目理解验收
+
+### 开发者能够独立说明的内容
+
+- POST 请求依次经过 Router、`IssueCreate`、`get_database` 提供的 `AsyncSession`、Service 创建逻辑和 MySQL，最后通过 `IssueRead` 返回客户端。AI 补充说明：`IssueRead` 是 FastAPI/Pydantic 的响应 Schema，不是 MySQL 返回的数据类型。
+- `flush()` 会把 SQL 发送到当前 MySQL 事务，但不会正式提交；`commit()` 才确认保存。
+- `flush()` 抛出异常后不会继续执行 `commit()`；异常向外传递，由 `get_database()` 回滚事务。
+- `DatabaseResources` 属于应用生命周期资源，应用启动时创建、关闭时释放；`AsyncSession` 按请求创建并在请求结束时关闭。AI 补充说明：`DatabaseResources` 保存 Engine 和 Session 工厂，不等同于一条始终打开的连接。
+- MySQL 表结构由 Alembic Migration 创建和更新；只修改 SQLAlchemy Model 不会自动改变已有数据库表。
+- fake Session 测试没有运行真实 MySQL，因此不能证明数据已经在真实数据库中持久化。
+
+### 问答中经过纠正后理解的内容
+
+- 开发者最初把 PATCH 的“未提交字段与显式 null”区别归因于 `model_validator`。经代码对照后确认：`model_validator` 使用 `model_fields_set` 拒绝空 PATCH 和非空字段的 null；Service 中的 `model_dump(exclude_unset=True)` 才负责只更新客户端明确提交的字段，同时保留可空字段的显式 `None`。
+- 开发者最初用“项目没问题”概括三层验收。经边界说明后确认：无数据库测试验证代码契约，真实 MySQL 测试验证实际持久化，Swagger 验证人工可操作性；三者都不能证明生产环境、并发、性能或所有未知场景没有问题。
+- “为什么该项目能证明 AI vibe coding”这一总结由 AI 提供，因此不把它记录为开发者独立回答。证据来自开发者控制需求取舍、敏感操作、真实验收和 Git，AI 协助设计、实现、测试、审查与记录。
+
+### 当前理解结论
+
+开发者已经能够沿代码解释一次创建请求的主要调用链，以及事务、Session 生命周期、迁移和测试边界中的核心职责；问答中出现的偏差也被明确保留，而不是只记录正确答案。阶段 5.3 至此完成，下一步仅剩开发者执行 GitHub Pull Request、自我审查、合并、同步 `main` 和清理功能分支。
