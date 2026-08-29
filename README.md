@@ -2,7 +2,7 @@
 
 DevFix Lite 是一个使用 FastAPI、SQLAlchemy AsyncSession、MySQL 和 Alembic 构建的单表异步 CRUD 后端，用于记录开发问题、解决过程、验证结果以及 AI 协作信息。
 
-当前已完成阶段 2 的单表设计重置、阶段 3 的模型与迁移，以及阶段 4.1—4.5 的创建、列表、详情、部分更新和删除接口。五个 CRUD 接口均已通过无数据库自动化测试，真实 CRUD 验收尚未开始。
+当前已完成阶段 2 的单表设计重置、阶段 3 的模型与迁移，以及阶段 4.1—4.5 的创建、列表、详情、部分更新和删除接口。五个接口已通过无数据库自动化测试，并已在专用 `devfix_test` 完成真实 HTTP CRUD 自动化验收和 Swagger 人工验收。
 
 ## 当前能力
 
@@ -78,7 +78,7 @@ mysql+asyncmy://用户名:经过URL编码的密码@127.0.0.1:3306/devfix?charset
 .\.venv\Scripts\python.exe -m pytest
 ```
 
-当前默认结果应为 `57 passed, 1 skipped`。真实 MySQL 用例默认需要显式启用，因此会被跳过；初次连接验收为 `1 passed in 0.27s`，迁移完成后的复验为 `1 passed in 0.11s`。
+当前默认结果应为 `57 passed, 2 skipped`。两个真实 MySQL 用例使用不同的显式开关，默认均会跳过：一个只验证 `SELECT 1`，另一个执行完整 HTTP CRUD。初次连接验收为 `1 passed in 0.27s`，迁移完成后的复验为 `1 passed in 0.11s`。
 
 ### 真实 MySQL 只读验收
 
@@ -96,6 +96,36 @@ Remove-Item Env:DEVFIX_TEST_DATABASE_URL -ErrorAction SilentlyContinue
 ```
 
 该测试只通过 `AsyncSession` 执行 `SELECT 1`，不会建表或写入数据。验收时必须显示 `1 passed`，不能以 skipped 代替。这个结果只能证明异步数据库连接成立；阶段 3 的迁移验收另外通过 `upgrade head`、`current --check-heads` 和 `alembic check` 完成。
+
+### 真实 MySQL CRUD 验收
+
+前提是 `devfix_test` 已通过 Alembic 升级到 head。该测试会真实写入、查询、修改和删除数据，因此使用独立开关，不会被上面的只读开关意外启用。
+
+只在当前 PowerShell 会话中设置：
+
+- `DEVFIX_RUN_MYSQL_CRUD_TESTS=1`
+- `DEVFIX_TEST_DATABASE_URL=<专用测试连接串>`
+
+然后执行：
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q -W error tests\integration\test_mysql_crud.py -rs
+Remove-Item Env:DEVFIX_RUN_MYSQL_CRUD_TESTS -ErrorAction SilentlyContinue
+Remove-Item Env:DEVFIX_TEST_DATABASE_URL -ErrorAction SilentlyContinue
+```
+
+测试只允许数据库名以 `_test` 结尾，通过真实 HTTP 请求依次执行 POST、列表、详情、PATCH、DELETE 和删除后 404。每次使用唯一 UUID title 和 marker 标记自己的记录，并在 `finally` 中只清理匹配任一标记的数据；不会建表、迁移、清空表或删除其他记录。2026-08-29，开发者在 `devfix_test` 显式运行该测试，结果为 `1 passed in 0.13s`，随后清理了连接串、运行开关和安全字符串变量。
+
+### Swagger 人工验收
+
+2026-08-29，开发者在当前 PowerShell 会话中临时设置指向 `devfix_test` 的 `DATABASE_URL`，使用 8001 端口启动 Uvicorn，并在 `/docs` 依次完成以下验证：
+
+- POST 返回 201，创建 ID 为 2、状态为 `OPEN` 的记录。
+- 列表 GET 返回 200，并包含新记录；详情 GET 返回 200。
+- PATCH 返回 200，将 `error_message` 清空，把 `status` 改为 `RESOLVED`，同时写入解决方案和验证说明；未提交的标题与描述保持不变，`updated_at` 发生变化。
+- 执行 DELETE 后再次 GET，返回 404 和 `{"detail": "Issue 不存在。"}`，证明记录已从真实 MySQL 删除。
+
+严格空响应体的 DELETE 204 契约由自动化测试覆盖；人工截图明确记录了删除后的 404 结果。验收结束后，开发者停止 Uvicorn，并清理了临时 `DATABASE_URL` 和安全字符串变量；连接串与密码未写入文件或发送给 AI。
 
 ## 当前目录
 
@@ -130,7 +160,8 @@ docs/
 tests/
 ├── conftest.py
 ├── integration/
-│   └── test_mysql_connection.py
+│   ├── test_mysql_connection.py
+│   └── test_mysql_crud.py
 ├── test_config.py
 ├── test_database.py
 ├── test_issue_create.py
@@ -152,9 +183,9 @@ Router 负责 HTTP 输入输出，Schema 负责请求和响应验证，Service �
 3. 阶段 2：将原三表方案重置为单表 CRUD，并确认 DevFix Lite v2.0 设计基线（已完成并提交）。
 4. 阶段 3：实现一个 `Issue` 模型和一条 Alembic 初始迁移（代码、静态检查和真实测试库验收均已完成）。
 5. 阶段 4：按创建、列表、详情、更新、删除五个小步完成 CRUD（五个接口均已完成无数据库测试）。
-6. 阶段 5：使用自动化测试、真实 MySQL、Swagger、README、AI 开发日志和 Pull Request 完成验收。
+6. 阶段 5：使用自动化测试、真实 MySQL、Swagger、README、AI 开发日志和 Pull Request 完成验收（真实 CRUD 自动化验收与 Swagger 人工验收已通过，PR 收尾待完成）。
 
-下一步由开发者审阅并提交删除接口小步；随后进入阶段 5，在专用 `devfix_test` 数据库完成真实 CRUD 与 Swagger 人工验收。
+下一步由开发者审阅并提交阶段 5 验收改动，然后完成 GitHub Pull Request 收尾。
 
 ## 设计资料
 

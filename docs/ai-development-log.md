@@ -479,3 +479,98 @@ DELETE /api/v1/issues/{issue_id}
   -> Router 返回严格空响应体的 204
   -> 数据库依赖关闭 Session；异常时先 rollback
 ```
+
+## 2026-08-29：阶段 5.1 真实 MySQL CRUD 验收准备
+
+### 本轮边界
+
+- 只增加一个真实 HTTP + MySQL CRUD 集成测试及相应文档，不修改任何生产代码。
+- 本轮不读取 `.env`、不读取或输出连接串、不创建 Engine，也不连接 MySQL。
+- 真实写入继续由开发者使用专用 `devfix_test` 和显式开关启动。
+- Swagger 人工验收、最终理解确认和 GitHub PR 收尾仍属于后续小步。
+
+### 安全设计
+
+- 新测试使用独立的 `DEVFIX_RUN_MYSQL_CRUD_TESTS=1`；原 `DEVFIX_RUN_MYSQL_TESTS=1` 继续只启用只读 `SELECT 1`，避免旧命令意外产生写入。
+- URL 只读取 `DEVFIX_TEST_DATABASE_URL`，并通过 `Settings(_env_file=None, ...)` 禁止读取项目 `.env`。
+- 在创建应用和 Engine 前重复验证数据库名必须以 `_test` 结尾。
+- 不调用 `create_all()`、Alembic、DROP、TRUNCATE 或无条件 DELETE。
+- 每次生成唯一 UUID title 和 marker；`finally` 只清理匹配任一标记的本测试记录，即使其中一个字段未正确持久化或接口中途失败也尝试清理。
+
+### 真实验收调用链
+
+测试将使用显式 Settings 创建独立 FastAPI 应用，手动进入 lifespan，并且不覆盖 `get_database`：
+
+```text
+HTTPX AsyncClient
+  -> FastAPI Router / Schema
+  -> 生产 get_database 依赖为每个请求创建 AsyncSession
+  -> Service
+  -> asyncmy
+  -> devfix_test
+```
+
+单个有序测试将执行：
+
+```text
+POST 创建
+  -> GET 列表找到新 ID
+  -> GET 详情
+  -> PATCH 修改并清空可空字段
+  -> 新请求 GET 证明更新已提交
+  -> DELETE 返回空 204
+  -> GET 返回 404
+  -> finally 精确清理 UUID marker
+```
+
+### 当前验证
+
+- 新测试默认运行：`1 skipped`，原因明确要求设置 `DEVFIX_RUN_MYSQL_CRUD_TESTS=1`。
+- 完整默认测试：`57 passed, 2 skipped`；两个跳过项分别是只读连接和真实 CRUD。
+- `python -m compileall -q app tests alembic`：成功。
+- `git diff --check`：通过。
+- 默认验证过程中没有读取测试 URL、创建 Engine 或连接数据库。
+
+### 开发者真实 MySQL 验收
+
+2026-08-29，开发者在当前 PowerShell 会话中安全输入专用测试连接串，设置 `DEVFIX_RUN_MYSQL_CRUD_TESTS=1`，并运行：
+
+```text
+pytest -q -W error tests/integration/test_mysql_crud.py -rs
+```
+
+结果为：
+
+```text
+1 passed in 0.13s
+```
+
+该结果证明真实请求完成了 POST、列表、详情、PATCH、跨请求持久化确认、DELETE 和删除后 404；测试的 `finally` 清理也成功结束。验收后，开发者删除了 `DEVFIX_RUN_MYSQL_CRUD_TESTS`、`DEVFIX_TEST_DATABASE_URL` 和本地安全字符串变量，连接串与密码没有发送给 AI。
+
+阶段 5.1 至此完成。当前仍不能宣称 Swagger 人工验收、GitHub PR 或整个项目已经完成。
+
+## 2026-08-29：阶段 5.2 Swagger 人工 CRUD 验收
+
+### 本轮边界
+
+- 开发者只在当前 PowerShell 会话中临时设置指向 `devfix_test` 的 `DATABASE_URL`，没有把连接串写入项目文件或发送给 AI。
+- 使用 Uvicorn 8001 端口和 FastAPI `/docs`，逐个操作五个 CRUD 接口。
+- 本轮不修改生产代码，不操作生产数据库；验收完成后再补充 README 和本日志。
+
+### 人工观察证据
+
+1. POST `/api/v1/issues` 返回 201，创建 ID 为 2、状态为 `OPEN` 的记录。
+2. GET `/api/v1/issues` 返回 200，列表包含 ID 2。
+3. GET `/api/v1/issues/2` 返回 200，返回单个目标记录。
+4. PATCH `/api/v1/issues/2` 返回 200：`error_message` 被清空，`solution` 和 `verification_notes` 被写入，状态变为 `RESOLVED`；标题与描述保持不变，`updated_at` 从 `2026-08-29T03:41:04.766383` 变为 `2026-08-29T03:46:05.359875`。
+5. 执行 DELETE `/api/v1/issues/2` 后，再次 GET 返回 404 和 `{"detail": "Issue 不存在。"}`，证明真实 MySQL 中的记录已经删除。
+
+严格空响应体的 DELETE 204 契约已有自动化测试覆盖；本次人工截图明确保存的是删除后 GET 404 证据，因此日志不把未截图的状态码冒充为人工观察结果。
+
+### 环境收尾
+
+- 开发者按 `Ctrl+C` 停止 Uvicorn。
+- 删除当前会话的 `DATABASE_URL` 环境变量和安全字符串变量。
+- Swagger 示例记录已经删除，没有留下本轮人工验收数据。
+
+阶段 5.2 至此完成。当前已具备无数据库测试、真实 MySQL 自动化 CRUD 和 Swagger 人工 CRUD 三层证据；GitHub Pull Request 收尾仍由开发者执行。
