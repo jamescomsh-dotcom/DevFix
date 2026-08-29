@@ -2,7 +2,7 @@
 
 DevFix Lite 是一个使用 FastAPI、SQLAlchemy AsyncSession、MySQL 和 Alembic 构建的单表异步 CRUD 后端，用于记录开发问题、解决过程、验证结果以及 AI 协作信息。
 
-当前已完成阶段 2 的单表设计重置、阶段 3 的模型与迁移，以及阶段 4.1—4.3 的问题创建、列表和详情接口。更新和删除尚未开始。
+当前已完成阶段 2 的单表设计重置、阶段 3 的模型与迁移，以及阶段 4.1—4.4 的问题创建、列表、详情和部分更新接口。删除尚未开始。
 
 ## 当前能力
 
@@ -18,6 +18,7 @@ DevFix Lite 是一个使用 FastAPI、SQLAlchemy AsyncSession、MySQL 和 Alembi
 - `POST /api/v1/issues`：校验输入并通过请求级 `AsyncSession` 创建问题，成功返回 201。
 - `GET /api/v1/issues`：返回全部问题；按 `created_at DESC, id DESC` 稳定排序，空结果返回 `[]`。
 - `GET /api/v1/issues/{issue_id}`：按主键返回完整问题记录；不存在返回 404，非整数路径参数返回 422。
+- `PATCH /api/v1/issues/{issue_id}`：只更新请求中明确提供的字段；支持清空可空字段，空请求或非法输入返回 422，不存在返回 404。
 
 ## 已确认的 MVP 范围
 
@@ -76,7 +77,7 @@ mysql+asyncmy://用户名:经过URL编码的密码@127.0.0.1:3306/devfix?charset
 .\.venv\Scripts\python.exe -m pytest
 ```
 
-当前默认结果应为 `40 passed, 1 skipped`。真实 MySQL 用例默认需要显式启用，因此会被跳过；初次连接验收为 `1 passed in 0.27s`，迁移完成后的复验为 `1 passed in 0.11s`。
+当前默认结果应为 `51 passed, 1 skipped`。真实 MySQL 用例默认需要显式启用，因此会被跳过；初次连接验收为 `1 passed in 0.27s`，迁移完成后的复验为 `1 passed in 0.11s`。
 
 ### 真实 MySQL 只读验收
 
@@ -134,6 +135,7 @@ tests/
 ├── test_issue_create.py
 ├── test_issue_detail.py
 ├── test_issue_list.py
+├── test_issue_update.py
 ├── test_migrations.py
 ├── test_models.py
 └── test_health.py
@@ -147,10 +149,10 @@ Router 负责 HTTP 输入输出，Schema 负责请求和响应验证，Service �
 2. 阶段 1：异步 Engine、Session 工厂和数据库依赖（本地技术验收已完成）。
 3. 阶段 2：将原三表方案重置为单表 CRUD，并确认 DevFix Lite v2.0 设计基线（已完成并提交）。
 4. 阶段 3：实现一个 `Issue` 模型和一条 Alembic 初始迁移（代码、静态检查和真实测试库验收均已完成）。
-5. 阶段 4：按创建、列表、详情、更新、删除五个小步完成 CRUD（创建、列表和详情接口已完成无数据库测试）。
+5. 阶段 4：按创建、列表、详情、更新、删除五个小步完成 CRUD（创建、列表、详情和部分更新接口已完成无数据库测试）。
 6. 阶段 5：使用自动化测试、真实 MySQL、Swagger、README、AI 开发日志和 Pull Request 完成验收。
 
-下一步由开发者审阅并提交详情接口小步；随后实现 `PATCH /api/v1/issues/{issue_id}` 部分更新接口。
+下一步由开发者审阅并提交部分更新接口小步；随后实现 `DELETE /api/v1/issues/{issue_id}` 删除接口。
 
 ## 设计资料
 

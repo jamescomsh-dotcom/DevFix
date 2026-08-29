@@ -4,10 +4,11 @@ from fastapi import APIRouter, HTTPException, status
 
 from app.dependencies import DatabaseSession
 from app.models import Issue
-from app.schemas.issue import IssueCreate, IssueRead
+from app.schemas.issue import IssueCreate, IssueRead, IssueUpdate
 from app.services.issue_service import create_issue as create_issue_record
 from app.services.issue_service import get_issue as get_issue_record
 from app.services.issue_service import list_issues as list_issue_records
+from app.services.issue_service import update_issue as update_issue_record
 
 
 router = APIRouter(
@@ -38,6 +39,27 @@ async def get_issue(
 ) -> Issue:
     """Return one development issue or translate a missing row to 404."""
     issue = await get_issue_record(session, issue_id)
+    if issue is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Issue 不存在。",
+        )
+    return issue
+
+
+@router.patch(
+    "/{issue_id}",
+    response_model=IssueRead,
+    responses={404: {"description": "Issue 不存在"}},
+    summary="部分更新开发问题记录",
+)
+async def update_issue(
+    issue_id: int,
+    issue_data: IssueUpdate,
+    session: DatabaseSession,
+) -> Issue:
+    """Update provided fields or translate a missing row to 404."""
+    issue = await update_issue_record(session, issue_id, issue_data)
     if issue is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

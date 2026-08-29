@@ -379,3 +379,57 @@ GET /api/v1/issues/{issue_id}
   -> 未找到：Router 返回 404
   -> 数据库依赖关闭 Session
 ```
+
+## 2026-08-29：阶段 4.4 部分更新 Issue 接口
+
+### 本轮边界
+
+- 只实现 `PATCH /api/v1/issues/{issue_id}` 和设计中最后一个请求 Schema `IssueUpdate`。
+- 只允许修改 title、description、error_message、ai_tool、ai_prompt、solution、verification_notes 和 status。
+- 不允许修改 id、created_at、updated_at 或未知字段，不增加状态机、并发控制、PUT 或 DELETE。
+- 默认测试继续使用 dependency override，不读取 `.env`，不连接 MySQL。
+
+### PATCH 字段语义
+
+- 字段未提供：不修改原值。
+- error_message、ai_tool、ai_prompt、solution、verification_notes 明确传 `null`：清空字段。
+- title、description、status 明确传 `null`：返回 422。
+- 空对象 `{}`、空白必填文本、非法状态、超长 ai_tool 和服务端字段：返回 422。
+- Service 必须使用 `model_dump(exclude_unset=True)`；不能使用 `exclude_none=True`，否则无法区分“未提供”和“明确清空”。
+
+### Red → Green
+
+1. 先增加部分更新、非法输入、404、flush 异常和 OpenAPI 测试；实现前 11 个用例全部因 PATCH 返回 405 或 OpenAPI 缺少 PATCH 而失败。
+2. `IssueUpdate` 使用 `extra='forbid'`，复用创建接口的去空格和长度规则，并通过 `model_fields_set` 拒绝空 PATCH 与非空字段的 null。
+3. Service 按 `get -> setattr 明确提供的字段 -> flush -> commit` 更新，不重新 add，也不 refresh。
+4. Router 返回完整 `IssueRead`；Service 返回 `None` 时转换为固定 404。
+5. 详情 OpenAPI 测试收窄为验证 GET 自身契约；更新测试接管 item path 当前恰好只有 GET 和 PATCH 的边界。
+
+### 测试与审查证据
+
+- 成功测试同时更新 title、ai_tool、status，并用 `solution: null` 证明可空字段能够清空；未提供的 description 等字段保持原值。
+- 共享事件列表锁定调用顺序为 `get -> flush -> commit`，同时确认没有 add、refresh 或 delete。
+- 找不到记录时返回 404，且不 flush、不 commit；flush 抛错时也不会 commit，异常继续交给数据库依赖 rollback。
+- 更新接口定向测试：`11 passed`。
+- 创建、列表、详情和更新接口测试：`25 passed`。
+- 完整默认测试：`51 passed, 1 skipped`；跳过项仍是真实 MySQL 连接用例。
+- `python -m compileall -q app tests alembic`：成功。
+- `git diff --check`：通过。
+
+`updated_at` 继续由 SQLAlchemy 模型的 Python `onupdate` 在实际 UPDATE 的 flush 阶段生成，模型测试已独立验证该回调。如果客户端提交的值与原值完全相同，SQLAlchemy 可能不发送 UPDATE，此时时间不变化；当前简单 MVP 接受这一语义。
+
+本轮证明的是 Schema 验证、部分字段映射、事务调用顺序、HTTP 响应和 OpenAPI 契约；尚未进行真实 MySQL 更新或 Swagger 人工验收。
+
+### 当前可解释的更新调用链
+
+```text
+PATCH /api/v1/issues/{issue_id}
+  -> FastAPI 使用 IssueUpdate 校验请求体
+  -> Router 调用 update_issue Service
+  -> Service 使用 AsyncSession.get() 查询记录
+  -> 只 setattr model_dump(exclude_unset=True) 中的字段
+  -> flush 发送 UPDATE，并在真实变更时生成 updated_at
+  -> commit 提交单表事务
+  -> IssueRead 序列化完整响应
+  -> 数据库依赖关闭 Session；异常时先 rollback
+```

@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Issue
-from app.schemas.issue import IssueCreate
+from app.schemas.issue import IssueCreate, IssueUpdate
 
 
 async def create_issue(
@@ -34,5 +34,24 @@ async def get_issue(
     issue_id: int,
 ) -> Issue | None:
     """Return one Issue by primary key, or None when it does not exist."""
-    #ger(ORM类.ORM类里的id)
+    #get(ORM类.ORM类里的id)
     return await session.get(Issue, issue_id)
+
+
+async def update_issue(
+    session: AsyncSession,
+    issue_id: int,
+    issue_data: IssueUpdate,
+) -> Issue | None:
+    """Apply explicitly provided fields and commit one Issue update."""
+    issue = await get_issue(session, issue_id)
+    if issue is None:
+        return None
+
+    changes = issue_data.model_dump(exclude_unset=True)
+    for field_name, value in changes.items():
+        setattr(issue, field_name, value)
+
+    await session.flush()
+    await session.commit()
+    return issue

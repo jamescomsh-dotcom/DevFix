@@ -108,7 +108,7 @@ async def test_get_issue_rejects_non_integer_path_id(
 
 
 @pytest.mark.asyncio
-async def test_openapi_exposes_only_get_for_issue_detail(
+async def test_openapi_exposes_get_contract_for_issue_detail(
     client: AsyncClient,
 ) -> None:
     response = await client.get("/openapi.json")
@@ -118,7 +118,7 @@ async def test_openapi_exposes_only_get_for_issue_detail(
     assert set(paths["/api/v1/issues"]) == {"get", "post"}
 
     detail_path = paths["/api/v1/issues/{issue_id}"]
-    assert set(detail_path) == {"get"}
+    assert "get" in detail_path
     detail_operation = detail_path["get"]
     assert {"200", "404", "422"}.issubset(detail_operation["responses"])
     response_schema = detail_operation["responses"]["200"]["content"][
