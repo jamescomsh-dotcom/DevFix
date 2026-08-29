@@ -1,4 +1,5 @@
 """Request and response schemas for Issue APIs."""
+#这里面的类是用来Request and response schemas，放在routers里用
 
 from datetime import datetime
 

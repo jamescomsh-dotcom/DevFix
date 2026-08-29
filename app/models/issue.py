@@ -9,7 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.enums import IssueStatus
 from app.models.base import Base, utc_now
 
-
+#sqlalchemy.orm类，是之后用于增删改查用的
 class Issue(Base):
     """A development problem, its solution, and AI collaboration notes."""
 

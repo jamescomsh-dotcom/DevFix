@@ -48,7 +48,7 @@ class Settings(BaseSettings):
             raise ValueError("DATABASE_URL 必须指定数据库名称。")
         return database_url
 
-
+#不管是alembic还是sqlalchemy获取URL创建引擎，然后根据引擎创建异步session来进行增删改查，都要执行下面的函数
 @lru_cache
 def get_settings() -> Settings:
     """Load settings once for the running application process."""

@@ -32,6 +32,9 @@ async def get_database(
 ) -> AsyncIterator[AsyncSession]:
     """Yield one AsyncSession and always close it after the request."""
     session = resources.session_factory()
+    #因为resources是DatabaseResources类里的对象，本来应该是resources.session_factory，是在DatabaseResources类里取出
+    #session_factory()这个，然后用session()=resources.session_factory,session=session()才行，但是这里直接用了resources.session_factory()
+    #相当于两步合成一步了
     try:
         yield session
     except Exception:
@@ -40,5 +43,5 @@ async def get_database(
     finally:
         await session.close()
 
-
+#routers里直接导入DatabaseSession，就可以直接使用ORM的增删改查方法
 DatabaseSession = Annotated[AsyncSession, Depends(get_database)]

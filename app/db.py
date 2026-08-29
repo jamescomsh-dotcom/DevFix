@@ -22,7 +22,7 @@ class DatabaseResources:
         """Release pooled database connections during application shutdown."""
         await self.engine.dispose()
 
-
+#下面的函数需要在main里调用，database_url需要传参
 def build_database_resources(database_url: str) -> DatabaseResources:
     """Build lazy async resources without connecting or creating tables."""
     engine = create_async_engine(

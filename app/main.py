@@ -16,10 +16,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
+        #获取Settings()对象，里面有URL
         resolved_settings = settings if settings is not None else get_settings()
         resources: DatabaseResources | None = None
 
         if resolved_settings.database_url is not None:
+            #因为resolved_settings是Settings()对象，所以对象.属性名获取URL，但是这个URL是SecretStr类型，所以还得get_secret_value()获取值
             resources = build_database_resources(
                 resolved_settings.database_url.get_secret_value()
             )
@@ -27,7 +29,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         application.state.database_resources = resources
 
-        #这样写，fastapi的可以让Request取到resources
+        #这样写，fastapi的可以让Request取到resources，这里的resources是DatabaseResources类里的一个对象
 
         try:
             yield
