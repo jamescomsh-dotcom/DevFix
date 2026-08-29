@@ -185,7 +185,6 @@ Router 负责 HTTP 输入输出，Schema 负责请求和响应验证，Service �
 5. 阶段 4：按创建、列表、详情、更新、删除五个小步完成 CRUD（五个接口均已完成无数据库测试）。
 6. 阶段 5：使用自动化测试、真实 MySQL、Swagger、README、AI 开发日志和 Pull Request 完成验收（真实 CRUD 自动化验收与 Swagger 人工验收已通过，PR 收尾待完成）。
 
-下一步由开发者审阅并提交阶段 5 验收改动，然后完成 GitHub Pull Request 收尾。
 
 ## 设计资料
 
