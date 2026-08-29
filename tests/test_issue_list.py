@@ -138,4 +138,3 @@ async def test_openapi_exposes_get_and_post_for_issue_collection(
     ]["schema"]
     assert get_schema["type"] == "array"
     assert get_schema["items"]["$ref"].endswith("/IssueRead")
-    assert "/api/v1/issues/{issue_id}" not in paths

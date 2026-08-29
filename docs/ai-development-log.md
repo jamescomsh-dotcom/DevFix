@@ -338,3 +338,44 @@ GET /api/v1/issues
   -> IssueRead 将 ORM 对象列表序列化为 JSON 数组
   -> 数据库依赖关闭 Session
 ```
+
+## 2026-08-28：阶段 4.3 查询单个 Issue 详情接口
+
+### 本轮边界
+
+- 只实现 `GET /api/v1/issues/{issue_id}`，复用已有 `IssueRead`。
+- 找到记录返回 200，找不到返回 404，非整数路径参数由 FastAPI 返回 422。
+- 不增加新 Schema、筛选、关系、PATCH 或 DELETE，也不修改模型和迁移。
+- 默认测试继续使用 dependency override，不读取 `.env`，不连接 MySQL。
+
+### Red → Green
+
+1. 先增加存在记录、不存在记录、非整数参数和 OpenAPI 四个测试；实现前得到 `4 failed`。
+2. Service 使用 `await session.get(Issue, issue_id)` 表达纯主键查询，返回 `Issue | None`。
+3. Router 把 Service 返回的 `None` 转换为 404 和 `{"detail": "Issue 不存在。"}`，找到时交给 `IssueRead` 输出完整 11 个字段。
+4. OpenAPI 明确详情路径只有 GET，同时声明 200、404 和自动生成的 422 响应。
+5. 创建和列表测试删除已经过期的“详情路径不存在”断言；详情测试接管 item path 的完整边界。
+
+### 只读边界与测试证据
+
+- 测试精确验证 `session.get(Issue, issue_id)` 只调用一次，并验证不存在时仍查询目标主键。
+- 测试验证详情 GET 不调用 `add`、`flush`、`commit`、`refresh` 或 `delete`。
+- 非整数路径参数在进入 Service 前返回 422，假 Session 的 `get()` 未被调用。
+- 定向测试：`14 passed`（创建、列表与详情接口）。
+- 完整默认测试：`40 passed, 1 skipped`；跳过项仍是真实 MySQL 连接用例。
+- `python -m compileall -q app tests alembic`：成功。
+- `git diff --check`：通过。
+
+`AsyncSession.get()` 可能先命中当前 Session 的 identity map，因此无数据库测试验证的是主键查询调用契约，而不是宣称检查了实际 MySQL SQL。本轮尚未进行真实 MySQL 详情查询或 Swagger 人工验收。
+
+### 当前可解释的详情调用链
+
+```text
+GET /api/v1/issues/{issue_id}
+  -> FastAPI 把路径参数校验为 int，并注入请求级 AsyncSession
+  -> issues Router 调用 get_issue Service
+  -> Service 使用 AsyncSession.get(Issue, issue_id) 按主键查询
+  -> 找到：IssueRead 将 ORM 对象序列化为完整 JSON
+  -> 未找到：Router 返回 404
+  -> 数据库依赖关闭 Session
+```

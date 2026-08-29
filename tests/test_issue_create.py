@@ -182,4 +182,3 @@ async def test_openapi_exposes_create_contract_for_issue_collection(
     issue_path = paths["/api/v1/issues"]
     assert "post" in issue_path
     assert issue_path["post"]["responses"].get("201") is not None
-    assert "/api/v1/issues/{issue_id}" not in paths
