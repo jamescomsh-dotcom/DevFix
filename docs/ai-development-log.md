@@ -433,3 +433,49 @@ PATCH /api/v1/issues/{issue_id}
   -> IssueRead 序列化完整响应
   -> 数据库依赖关闭 Session；异常时先 rollback
 ```
+
+## 2026-08-29：阶段 4.5 删除 Issue 接口
+
+### 本轮边界
+
+- 只实现 `DELETE /api/v1/issues/{issue_id}` 硬删除。
+- 成功返回严格无响应体的 204；记录不存在返回固定 404；非整数路径参数返回 422。
+- 不实现软删除、批量删除、确认请求体、删除原因、级联关系或删除前数据响应。
+- 不修改 Schema、Model、Migration、数据库配置或其他四个业务接口。
+- 默认测试继续使用 dependency override，不读取 `.env`，不连接 MySQL。
+
+### Red → Green
+
+1. 先增加成功删除、删除后查询、不存在、非整数参数、delete/flush 异常和 OpenAPI 测试；实现前 6 个用例全部因 DELETE 返回 405 或 OpenAPI 缺少 DELETE 而失败。
+2. Service 按 `get -> await delete -> flush -> commit` 执行；不存在时返回 False，异常不被吞掉。
+3. 显式 flush 使 DELETE 数据库错误发生在 commit 之前；delete 或 flush 失败时均不 commit，生产数据库依赖负责 rollback。
+4. Router 把 False 转换为 404；成功时显式返回 `Response(status_code=204)`，确保没有 `null`、JSON 对象或 Content-Type。
+5. 更新接口的 OpenAPI 测试收窄为验证 PATCH 自身；删除测试接管 item path 当前完整方法集合 GET、PATCH、DELETE。
+
+### 测试与审查证据
+
+- 成功测试精确验证 204、空字节响应体、空文本和无 Content-Type。
+- 共享事件列表锁定 `get -> delete -> flush -> commit`，并验证 `AsyncSession.delete()` 被正确 await。
+- fake 状态只在 commit 成功后切换为已删除，随后 GET 同一 ID 返回 404；这验证调用链，不冒充真实数据库持久化。
+- 不存在时不调用 delete、flush、commit；非整数 ID 在进入 Service 前返回 422。
+- delete 失败时不 flush、不 commit；flush 失败时不 commit。
+- 删除接口定向测试：`6 passed`。
+- 五个 CRUD 接口测试：`31 passed`。
+- 完整默认测试：`57 passed, 1 skipped`；跳过项仍是真实 MySQL 连接用例。
+- `python -m compileall -q app tests alembic`：成功。
+- `git diff --check`：通过。
+
+本轮完成了阶段 4 的五个接口代码和无数据库测试，但尚未证明 MySQL 中记录真实删除，也尚未完成 Swagger 人工演示；这些属于阶段 5 验收。
+
+### 当前可解释的删除调用链
+
+```text
+DELETE /api/v1/issues/{issue_id}
+  -> FastAPI 校验 issue_id 并注入请求级 AsyncSession
+  -> Router 调用 delete_issue Service
+  -> Service 使用 AsyncSession.get() 查询记录
+  -> 不存在：Router 返回 404
+  -> 存在：await delete 标记删除，flush 发送 DELETE，commit 提交
+  -> Router 返回严格空响应体的 204
+  -> 数据库依赖关闭 Session；异常时先 rollback
+```

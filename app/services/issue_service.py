@@ -55,3 +55,18 @@ async def update_issue(
     await session.flush()
     await session.commit()
     return issue
+
+
+async def delete_issue(
+    session: AsyncSession,
+    issue_id: int,
+) -> bool:
+    """Delete one Issue and report whether it existed."""
+    issue = await get_issue(session, issue_id)
+    if issue is None:
+        return False
+
+    await session.delete(issue)
+    await session.flush()
+    await session.commit()
+    return True

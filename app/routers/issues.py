@@ -1,11 +1,12 @@
 """HTTP routes for the single Issue resource."""
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 
 from app.dependencies import DatabaseSession
 from app.models import Issue
 from app.schemas.issue import IssueCreate, IssueRead, IssueUpdate
 from app.services.issue_service import create_issue as create_issue_record
+from app.services.issue_service import delete_issue as delete_issue_record
 from app.services.issue_service import get_issue as get_issue_record
 from app.services.issue_service import list_issues as list_issue_records
 from app.services.issue_service import update_issue as update_issue_record
@@ -66,6 +67,27 @@ async def update_issue(
             detail="Issue 不存在。",
         )
     return issue
+
+
+@router.delete(
+    "/{issue_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+    responses={404: {"description": "Issue 不存在"}},
+    summary="删除开发问题记录",
+)
+async def delete_issue(
+    issue_id: int,
+    session: DatabaseSession,
+) -> Response:
+    """Delete one development issue or translate a missing row to 404."""
+    deleted = await delete_issue_record(session, issue_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Issue 不存在。",
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(

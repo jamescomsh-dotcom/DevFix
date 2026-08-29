@@ -176,14 +176,14 @@ async def test_patch_issue_does_not_commit_when_flush_fails(
 
 
 @pytest.mark.asyncio
-async def test_openapi_exposes_get_and_patch_for_issue_detail(
+async def test_openapi_exposes_patch_contract_for_issue_detail(
     client: AsyncClient,
 ) -> None:
     response = await client.get("/openapi.json")
 
     assert response.status_code == 200
     detail_path = response.json()["paths"]["/api/v1/issues/{issue_id}"]
-    assert set(detail_path) == {"get", "patch"}
+    assert "patch" in detail_path
 
     patch_operation = detail_path["patch"]
     assert {"200", "404", "422"}.issubset(patch_operation["responses"])
@@ -195,4 +195,3 @@ async def test_openapi_exposes_get_and_patch_for_issue_detail(
         "application/json"
     ]["schema"]
     assert response_schema["$ref"].endswith("/IssueRead")
-    assert "delete" not in detail_path
